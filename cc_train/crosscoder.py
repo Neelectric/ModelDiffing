@@ -11,6 +11,7 @@ from huggingface_hub import hf_hub_download
 from typing import NamedTuple
 
 DTYPES = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
+raise NotImplementedError("I need to change this save directory!")
 SAVE_DIR = Path("/workspace/crosscoder-model-diff-replication/checkpoints")
 
 class LossOutput(NamedTuple):
@@ -41,13 +42,13 @@ class CrossCoder(nn.Module):
                 )
             )
         )
-        self.W_dec = nn.Parameter(
-            torch.nn.init.normal_(
-                torch.empty(
-                    d_hidden, 2, d_in, dtype=self.dtype
-                )
-            )
-        )
+        # self.W_dec = nn.Parameter(
+        #     torch.nn.init.normal_(
+        #         torch.empty(
+        #             d_hidden, 2, d_in, dtype=self.dtype
+        #         )
+        #     )
+        # )
         # Make norm of W_dec 0.1 for each column, separate per layer
         self.W_dec.data = (
             self.W_dec.data / self.W_dec.data.norm(dim=-1, keepdim=True) * self.cfg["dec_init_norm"]
@@ -126,6 +127,7 @@ class CrossCoder(nn.Module):
         return LossOutput(l2_loss=l2_loss, l1_loss=l1_loss, l0_loss=l0_loss, explained_variance=explained_variance, explained_variance_A=explained_variance_A, explained_variance_B=explained_variance_B)
 
     def create_save_dir(self):
+        raise NotImplementedError("I need to change this to the new OLMo-2 code!")
         base_dir = Path("/workspace/crosscoder-model-diff-replication/checkpoints")
         version_list = [
             int(file.name.split("_")[1])
@@ -140,6 +142,7 @@ class CrossCoder(nn.Module):
         self.save_dir.mkdir(parents=True)
 
     def save(self):
+        raise NotImplementedError("I need to change this to the new OLMo-2 code!")
         if self.save_dir is None:
             self.create_save_dir()
         weight_path = self.save_dir / f"{self.save_version}.pt"
@@ -173,6 +176,7 @@ class CrossCoder(nn.Module):
         """
 
         # Download config and weights
+        raise NotImplementedError("I need to change this to the new OLMo-2 code!")
         config_path = hf_hub_download(
             repo_id=repo_id,
             filename=f"{path}/cfg.json"
@@ -201,6 +205,7 @@ class CrossCoder(nn.Module):
 
     @classmethod
     def load(cls, version_dir, checkpoint_version):
+        raise NotImplementedError("I need to change this to the new OLMo-2 code!")
         save_dir = Path("/workspace/crosscoder-model-diff-replication/checkpoints") / str(version_dir)
         cfg_path = save_dir / f"{str(checkpoint_version)}_cfg.json"
         weight_path = save_dir / f"{str(checkpoint_version)}.pt"
