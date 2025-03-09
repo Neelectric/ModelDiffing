@@ -21,6 +21,7 @@ def prepare_subset_mix(dataset_name: str = 'allenai/dolmino-mix-1124'):
         key: round(token_sizes[key]/total_size, 5)
         for key in token_sizes.keys()
     }
+    print(proportion_dict)
     return proportion_dict
 
 def custom_collate_fn(batch):
@@ -33,14 +34,14 @@ def custom_collate_fn(batch):
         return {'text': []}
     
     print(filtered_batch[0]["source"])
-    print(filtered_batch[0]["text"])
+    # print(filtered_batch[0]["text"])
     
     return {
         'text': [item['text'] for item in filtered_batch],
         'source': [item['source'] for item in filtered_batch]
     }
 
-def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: int = 1, max_batches: int = 5):
+def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: int = 1, max_batches: int = 3):
     # tokenizer prep
     tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-2-1124-7B")
     tokenizer.padding_side = "left"
@@ -62,9 +63,7 @@ def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: 
     
     # buffer_size = 10_000  # Adjust based on memory constraints
     # iterable_dataset = dataset.shuffle(buffer_size=buffer_size)
-    
     # filtered_dataset = iterable_dataset.filter(lambda example: example is not None and example.get('text') is not None)
-    # print('filtered!')
     
     dataloader = torch.utils.data.DataLoader(
         dolmino,
@@ -73,6 +72,7 @@ def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: 
     )
     
     tokenized_batches = []
+    lengths = torch.tensor([0], dtype=torch.float32)
     for i, batch in enumerate(dataloader):
         if i >= max_batches:
             break
@@ -81,33 +81,31 @@ def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: 
             if not batch['text']:  # Skip empty batches
                 print(f"Batch {i} is empty, skipping.")
                 continue
-                
-            print(f"\nBatch {i}:")
-            print(batch)
             
-            # Tokenize the batch
             inputs = tokenizer(
                 batch['text'],
                 padding=True,
                 truncation=True,
-                max_length=1024,  # Adjust as needed
+                max_length=32_768,  
                 return_tensors="pt"
             )
             
-            # Print tokenization stats
             input_ids = inputs.input_ids
-            print(f"Tokenized shape: {input_ids.shape}")
-            print(f"Tokens in first example: {input_ids.shape[1]}")
-            
-            # Decode a few tokens to verify tokenization
+            # print(f"Tokenized shape: {input_ids.shape}")
+            length = torch.tensor([input_ids.shape[1]], dtype=torch.float32)
+            lengths = torch.cat((lengths, length))
             first_10_tokens = input_ids[0, :10]  
             decoded_tokens = tokenizer.convert_ids_to_tokens(first_10_tokens)
-            print(f"First 10 tokens: {decoded_tokens}")
             
             tokenized_batches.append(inputs)
             
         except Exception as e:
             print(f"Error processing batch {i}: {e}")
+    print(lengths)
+    mean = torch.mean(lengths)
+    sum = torch.sum(lengths)
+    print(f"Average token length: {mean}")
+    print(f"Full token length: {sum}")
     
     return tokenized_batches
 
@@ -117,6 +115,6 @@ def process_math():
 if __name__ == "__main__":
     print("Starting OLMo tokenization...")
 
-    process_dataset(batch_size=1, max_batches=3)
+    process_dataset(batch_size=1, max_batches=2000)
 
     # process_math()
