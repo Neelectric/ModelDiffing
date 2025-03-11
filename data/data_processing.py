@@ -5,6 +5,9 @@ from datasets import load_dataset, interleave_datasets, get_dataset_config_names
 import torch
 from typing import Dict, List, Optional, Any
 
+tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-2-1124-7B")
+tokenizer.padding_side = "left"
+
 def prepare_subset_mix(dataset_name: str = 'allenai/dolmino-mix-1124'):
     subsets = get_dataset_config_names(dataset_name)
     token_sizes = {
@@ -42,10 +45,6 @@ def custom_collate_fn(batch):
     }
 
 def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: int = 1, max_batches: int = 3):
-    # tokenizer prep
-    tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-2-1124-7B")
-    tokenizer.padding_side = "left"
-
     # create interleaved dataset with correct proportions
     proportion_dict = prepare_subset_mix(dataset_name)
     proportions = []
@@ -59,14 +58,11 @@ def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: 
         )
         dolmino_subsets.append(subset)
         proportions.append(proportion_dict[subset_name])
-    dolmino = interleave_datasets(dolmino_subsets, probabilities=proportions, seed=42)
+    dataset = interleave_datasets(dolmino_subsets, probabilities=proportions, seed=42)
     
-    # buffer_size = 10_000  # Adjust based on memory constraints
-    # iterable_dataset = dataset.shuffle(buffer_size=buffer_size)
-    # filtered_dataset = iterable_dataset.filter(lambda example: example is not None and example.get('text') is not None)
     
     dataloader = torch.utils.data.DataLoader(
-        dolmino,
+        dataset,
         batch_size=batch_size,
         collate_fn=custom_collate_fn
     )
@@ -91,7 +87,6 @@ def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: 
             )
             
             input_ids = inputs.input_ids
-            # print(f"Tokenized shape: {input_ids.shape}")
             length = torch.tensor([input_ids.shape[1]], dtype=torch.float32)
             lengths = torch.cat((lengths, length))
             first_10_tokens = input_ids[0, :10]  
@@ -109,12 +104,42 @@ def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: 
     
     return tokenized_batches
 
-def process_math():
+def process_math(batch_size=1, max_batches=10):
+    dataset = load_dataset("open-r1/OpenR1-Math-220k", split='train')
+    counter = 0
+    for elt in dataset:
+        print(elt["messages"])
+        print("\n\n")
+        if counter == 5:
+            break
+        counter += 1
     return
+
+def process_tulu(batch_size=1, max_batches=10):
+    dataset = load_dataset(
+        "allenai/tulu-3-sft-olmo-2-mixture",
+        split='train',
+        streaming=True,
+    )
+    shuffled_dataset = dataset.shuffle(buffer_size=10_000, seed=42)
+    counter = 0
+    for elt in dataset:
+        # print(elt["messages"])
+        print(elt)
+        print("\n\n")
+        if counter >= 3:
+            break
+        counter += 1
+    
+    return None
 
 if __name__ == "__main__":
     print("Starting OLMo tokenization...")
 
-    process_dataset(batch_size=1, max_batches=2000)
+    # process_dataset(batch_size=1, max_batches=2000)
+
+    process_tulu(batch_size=1, max_batches=10)
+
+    # process_math(batch_size=1, max_batches=10)
 
     # process_math()
