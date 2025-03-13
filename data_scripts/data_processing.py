@@ -4,6 +4,7 @@ from transformers import AutoTokenizer
 from datasets import load_dataset, interleave_datasets, get_dataset_config_names
 import torch
 from typing import Dict, List, Optional, Any
+from tqdm import tqdm
 
 tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-2-1124-7B")
 tokenizer.padding_side = "left"
@@ -80,9 +81,9 @@ def process_dataset(dataset_name: str = "allenai/dolmino-mix-1124", batch_size: 
             
             inputs = tokenizer(
                 batch['text'],
-                padding=True,
+                padding="max_length",
                 truncation=True,
-                max_length=32_768,  
+                max_length=4096,  
                 return_tensors="pt"
             )
             
@@ -116,20 +117,46 @@ def process_math(batch_size=1, max_batches=10):
     return
 
 def process_tulu(batch_size=1, max_batches=10):
+    inst_tokenizer = AutoTokenizer.from_pretrained("allenai/OLMo-2-1124-7B-Instruct")
+    inst_tokenizer.padding_side = "left"
     dataset = load_dataset(
         "allenai/tulu-3-sft-olmo-2-mixture",
         split='train',
-        streaming=True,
     )
-    shuffled_dataset = dataset.shuffle(buffer_size=10_000, seed=42)
+    shuffled_dataset = dataset.shuffle(seed=42)
     counter = 0
-    for elt in dataset:
-        # print(elt["messages"])
-        print(elt)
-        print("\n\n")
-        if counter >= 3:
+    lengths = torch.tensor([0], dtype=torch.float32)
+    for elt in tqdm(shuffled_dataset, total=max_batches, dynamic_ncols=True):
+        # print(elt)
+
+        messages = elt["messages"]
+        templated = inst_tokenizer.apply_chat_template(messages, tokenize=False)
+        # print(templated)
+        tokenized = tokenizer(
+            templated, 
+            return_tensors="pt",
+            padding="max_length",
+            truncation=True,
+            max_length=4096, 
+            )
+        # print(tokenized)
+        # print("\n\n")
+        input_ids = tokenized.input_ids
+        print(input_ids) #in a normal convo this seems to have two instances of 100257
+        length = torch.tensor([input_ids.shape[1]], dtype=torch.float32)
+        lengths = torch.cat((lengths, length))
+
+
+
+
+        if counter >= max_batches:
             break
         counter += 1
+    print(lengths)
+    mean = torch.mean(lengths)
+    sum = torch.sum(lengths)
+    print(f"Average token length: {mean}")
+    print(f"Full token length: {sum}")
     
     return None
 
@@ -138,7 +165,7 @@ if __name__ == "__main__":
 
     # process_dataset(batch_size=1, max_batches=2000)
 
-    process_tulu(batch_size=1, max_batches=10)
+    process_tulu(batch_size=1, max_batches=3)
 
     # process_math(batch_size=1, max_batches=10)
 
