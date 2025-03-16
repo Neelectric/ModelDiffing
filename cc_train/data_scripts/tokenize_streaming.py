@@ -45,17 +45,18 @@ def custom_collate_fn(batch):
             'text': [item['text'] for item in filtered_batch],
         }
     
-def create_dataset(raw_instances, formatted_conversations, tokenized_conversations):
-    assert len(raw_instances) == len(formatted_conversations) == len(tokenized_conversations)
+def create_dataset(raw_instances, formatted_conversations, tokenized_conversations, attention_masks):
+    assert len(raw_instances) == len(formatted_conversations) == len(tokenized_conversations) == len(attention_masks)
     tokenized_conversations_tensor = torch.stack(tokenized_conversations)
     dataset_list = [
         {
             "raw": raw,
             "formatted": formatted,
             "tokenized": tokenized,
+            "attention_mask": attention_mask,
         }
-        for raw, formatted, tokenized in zip(
-            raw_instances, formatted_conversations, tokenized_conversations_tensor
+        for raw, formatted, tokenized, attention_mask in zip(
+            raw_instances, formatted_conversations, tokenized_conversations_tensor, attention_masks
         )
     ]
     return Dataset.from_list(dataset_list)
@@ -94,6 +95,7 @@ def process_pretrain_dataset(
     )
     batches = []
     tokenized_batches = []
+    attention_masks = []
     lengths = []
     tokens_so_far = 0
     with tqdm(total=max_tokens, dynamic_ncols=True) as pbar:
@@ -120,6 +122,7 @@ def process_pretrain_dataset(
                     break
                 batches.append(batch['text'][0])
                 tokenized_batches.append(inputs.input_ids[0])
+                attention_masks.append(inputs.attention_mask[0])
                 # print(tokenized_batches)
             except Exception as e:
                 print(f"Error processing batch {i}: {e}")
@@ -128,7 +131,7 @@ def process_pretrain_dataset(
     print(f"Average token length: {mean}")
     print(f"Full token length: {sum(lengths)}")
     # token_dataset = Dataset.from_list(tokenized_batches)
-    token_dataset = create_dataset(batches, batches, tokenized_batches)
+    token_dataset = create_dataset(batches, batches, tokenized_batches, attention_masks)
     return token_dataset
 
 
@@ -147,6 +150,7 @@ def sample_half_toks(SFT_dataset, max_num_tokens):
     raw_instances = []
     formatted_conversations = []
     tokenized_conversations = []
+    attention_masks = []
     num_tokens = 0
     ds_columns = SFT_dataset.column_names
     formatted_ds = SFT_dataset.map(lambda x: {"formatted_chat" : tokenizer.apply_chat_template(x["messages"], tokenize=False, add_generation_prompt=False)}, num_proc=16, remove_columns=ds_columns)
@@ -160,10 +164,11 @@ def sample_half_toks(SFT_dataset, max_num_tokens):
         raw_instances.extend(instances)
         formatted_conversations.extend(detokenized)
         tokenized_conversations.extend(tokenized["input_ids"])
+        attention_masks.extend(tokenized["attention_mask"])
         num_tokens += len_tokenized
         progress_bar.update(len_tokenized)
     progress_bar.close()
-    return raw_instances, formatted_conversations, tokenized_conversations, num_tokens
+    return raw_instances, formatted_conversations, tokenized_conversations, attention_masks, num_tokens
 
 def process_SFT_dataset(
         dataset_name: str = "open-r1/OpenR1-Math-220k", 
@@ -173,21 +178,21 @@ def process_SFT_dataset(
         ):
     dataset = load_dataset("open-r1/OpenR1-Math-220k", "default")["train"]
     shuffled_dataset = dataset.shuffle(seed=42)
-    raw_instances, formatted_conversations, tokenized_conversations, num_tokens = sample_half_toks(shuffled_dataset, max_tokens)
-    dataset = create_dataset(raw_instances, formatted_conversations, tokenized_conversations)
+    raw_instances, formatted_conversations, tokenized_conversations, attention_masks, num_tokens = sample_half_toks(shuffled_dataset, max_tokens)
+    dataset = create_dataset(raw_instances, formatted_conversations, tokenized_conversations, attention_masks)
     return dataset
 
 
 if __name__ == "__main__":
     print("Starting tokenization...")
 
-    dataset_name = "mlfoundations/dclm-baseline-1.0-parquet"
-    final_dataset_path = "dclm-200M_SmolLM2-1.7B"
+    # dataset_name = "mlfoundations/dclm-baseline-1.0-parquet"
+    # final_dataset_path = "dclm-200M_SmolLM2-1.7B"
 
     # dataset_name = "allenai/tulu-3-sft-olmo-2-mixture"
 
-    # dataset_name = "open-r1/OpenR1-Math-220k"
-    # final_dataset_path = "OpenR1-Math-220k-200M_SmolLM2-1.7B"
+    dataset_name = "open-r1/OpenR1-Math-220k"
+    final_dataset_path = "OpenR1-Math-220k-200M_SmolLM2-1.7B"
 
     model_id = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -199,20 +204,20 @@ if __name__ == "__main__":
     save_directory = "/home/user/repos/ModelDiffing/data/" + final_dataset_path
 
     # Process a pre-training dataset
-    processed_dataset = process_pretrain_dataset(
-        dataset_name=dataset_name,
-        batch_size=1, 
-        max_length=max_length,
-        max_tokens=max_tokens,
-        )
-
-    # Process an SFT dataset
-    # processed_dataset = process_SFT_dataset(
+    # processed_dataset = process_pretrain_dataset(
     #     dataset_name=dataset_name,
-    #     batch_size=batch_size, 
+    #     batch_size=1, 
     #     max_length=max_length,
     #     max_tokens=max_tokens,
     #     )
+
+    # Process an SFT dataset
+    processed_dataset = process_SFT_dataset(
+        dataset_name=dataset_name,
+        batch_size=batch_size, 
+        max_length=max_length,
+        max_tokens=max_tokens,
+        )
 
     # Save to disk and push to hub
     if not os.path.exists(save_directory):

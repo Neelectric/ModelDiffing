@@ -23,7 +23,7 @@ base_model_id = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 ft_model_id = "Neelectric/SmolLM2-1.7B-Instruct_SFT"
 
 ### load in the tokens
-all_tokens = load_mixed_tokens(
+all_tokens, attention_masks = load_mixed_tokens(
             # base_model_id,
             pretrain_dataset_name = "dclm-200M_SmolLM2-1.7B",
             sft_dataset_name = "OpenR1-Math-220k-200M_SmolLM2-1.7B",
@@ -71,7 +71,7 @@ default_cfg = {
     "beta2": 0.999,
     "d_in": base_model.cfg.d_model,
     "dict_size": 2**14,
-    "seq_len": 1024,
+    "seq_len": 8192,
     "enc_dtype": "fp32",
     "model_name": "SmolLM2-1.7B-Instruct",
     "site": "resid_pre",
@@ -87,5 +87,5 @@ default_cfg = {
 }
 cfg = arg_parse_update_cfg(default_cfg)
 
-trainer = Trainer(cfg, base_model, ft_model, all_tokens)
+trainer = Trainer(cfg, base_model, ft_model, all_tokens, attention_masks)
 trainer.train()

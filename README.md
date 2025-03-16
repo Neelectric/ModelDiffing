@@ -3,6 +3,7 @@ This repository includes code for Model Diffing experiments.
 
 # Reproducing my results
 Inspired by [open-r1], I make use of uv for this project. Create a virtual environment with uv via <uv venv --python 3.10 && source venv/bin/activate && uv pip install --upgrade pip && uv pip install -r requirements.txt>
+May also need <uv pip install -q git+https://github.com/Neelectric/TransformerLensQwen2.5.git@main>
 
 # Repo structure
 - In ./cc_train, I organise all code relating to training cross-coders. This borrows lots of code from the [open-source replication repo](https://github.com/ckkissane/crosscoder-model-diff-replication) by Kissane et al. and an [open-source repo](https://github.com/neelnanda-io/Crosscoders) by Neel Nanda.
