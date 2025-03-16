@@ -6,12 +6,6 @@ from huggingface_hub import hf_api
 from tempfile import NamedTemporaryFile
 
 
-model_id = "allenai/OLMo-2-1124-7B-Instruct"
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-tokenizer.padding_side = "left"
-max_length = 4096
-
-
 def tokenize_and_truncate(formatted_instances):
     tokenized = tokenizer(formatted_instances, truncation=True, padding="max_length", max_length=max_length, return_tensors="pt")
     detokenized = tokenizer.batch_decode(tokenized["input_ids"])
@@ -27,7 +21,6 @@ def sample_half_toks(tulu, max_num_tokens):
     progress_bar = tqdm(total=max_num_tokens, desc="Tokens processed", unit="token")
     for i in range(0, len(tulu), 100):
         instances = formatted_ds[i:min(i+100, len(tulu))]["formatted_chat"]
-        # formatted_instances = format_or_prompts(raw_instances)
         tokenized, detokenized = tokenize_and_truncate(instances)
         len_tokenized = tokenized["input_ids"].shape[0] * tokenized["input_ids"].shape[1]
         if num_tokens + len_tokenized > max_num_tokens:
@@ -42,9 +35,7 @@ def sample_half_toks(tulu, max_num_tokens):
 
 def create_dataset(raw_instances, formatted_conversations, tokenized_conversations):
     assert len(raw_instances) == len(formatted_conversations) == len(tokenized_conversations)
-    # turn tokenized from list of tensors to tensor here:
     tokenized_conversations_tensor = torch.stack(tokenized_conversations)
-
     dataset_list = [
         {
             "raw": raw,
@@ -57,9 +48,12 @@ def create_dataset(raw_instances, formatted_conversations, tokenized_conversatio
     ]
     return Dataset.from_list(dataset_list)
 
-@torch.no_grad
-def main():
+if __name__ == "__main__":
     max_tokens = 400_000_000
+    model_id = "allenai/OLMo-2-1124-7B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer.padding_side = "left"
+    max_length = 4096
     half_max_tokens = max_tokens // 2
     print(f"max_tokens is {max_tokens}, so we will sample {half_max_tokens}")
 
@@ -75,7 +69,3 @@ def main():
 
     dataset.save_to_disk("/home/user/repos/ModelDiffing/data/tulu_200M-OLMo-2")
     dataset.push_to_hub("Neelectric/tulu_200M-OLMo-2")
-
-
-if __name__ == "__main__":
-    main()

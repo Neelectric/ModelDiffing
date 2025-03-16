@@ -1,0 +1,209 @@
+# Written by Neel Rajani, 05.03.25. 
+
+from transformers import AutoTokenizer
+from datasets import load_dataset, interleave_datasets, get_dataset_config_names, Dataset
+import torch
+from typing import Dict, List, Optional, Any
+from tqdm import tqdm
+import os
+
+
+def prepare_subset_mix(dataset_name: str = 'allenai/dolmino-mix-1124'):
+    subsets = get_dataset_config_names(dataset_name)
+    token_sizes = {
+        "dclm": 752,
+        "flan": 17,
+        "pes2o": 58.6,
+        "stackexchange": 1.26,
+        "wiki": 3.7,
+        "math": 10.7,
+    }
+    assert [list(token_sizes.keys())] == [subsets[1:]]
+    total_size = sum(list(token_sizes.values()))
+    proportion_dict = {
+        key: round(token_sizes[key]/total_size, 5)
+        for key in token_sizes.keys()
+    }
+    print(proportion_dict)
+    return proportion_dict
+
+def custom_collate_fn(batch):
+    """
+    Custom collation function that handles None values and only collates 'text' field.
+    """
+    # Filter out examples with None text
+    filtered_batch = [item for item in batch if item is not None and item.get('text') is not None]
+    if not filtered_batch:
+        return {'text': []}
+    
+    # print(filtered_batch[0]["source"])
+    # print(filtered_batch[0]["text"])
+    if "source" in list(filtered_batch[0].keys()):
+        return {
+            'text': [item['text'] for item in filtered_batch],
+            'source': [item['source'] for item in filtered_batch]
+        }
+    else:
+        return {
+            'text': [item['text'] for item in filtered_batch],
+        }
+
+def process_pretrain_dataset(
+        dataset_name: str = "allenai/dolmino-mix-1124", 
+        batch_size: int = 1, 
+        max_length: int = 4096,
+        max_tokens: int = 200_000_000,
+        ):
+    # create interleaved dataset with correct proportions
+    if dataset_name == 'allenai/dolmino-mix-1124':
+        proportion_dict = prepare_subset_mix(dataset_name)
+        proportions = []
+        dolmino_subsets = []
+        for subset_name in proportion_dict.keys():
+            subset = load_dataset(
+                dataset_name,
+                subset_name,
+                split='train',
+                streaming=True,
+            )
+            dolmino_subsets.append(subset)
+            proportions.append(proportion_dict[subset_name])
+        dataset = interleave_datasets(dolmino_subsets, probabilities=proportions, seed=42)
+    else:
+        dataset = load_dataset(
+                dataset_name,
+                split='train',
+                streaming=True,
+            )
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        collate_fn=custom_collate_fn
+    )
+    tokenized_batches = []
+    lengths = []
+    tokens_so_far = 0
+    with tqdm(total=max_tokens, dynamic_ncols=True) as pbar:
+        for i, batch in enumerate(dataloader):
+            try:
+                if not batch['text']:  # Skip empty batches
+                    print(f"Batch {i} is empty, skipping.")
+                    continue
+                
+                inputs = tokenizer(
+                    batch['text'],
+                    padding="max_length",
+                    truncation=True,
+                    max_length=max_length,  
+                    return_tensors="pt"
+                )
+                
+                input_ids = inputs.input_ids
+                lengths.append(input_ids.shape[1])
+                tokens_so_far += input_ids.shape[1]
+                pbar.update(input_ids.shape[1])
+                if tokens_so_far >= max_tokens:
+                    print(f"Finished tokenizing {max_tokens} tokens. Exiting loop.")
+                    break
+                tokenized_batches.append(inputs)
+            except Exception as e:
+                print(f"Error processing batch {i}: {e}")
+
+    mean = sum(lengths) / len(lengths)
+    print(f"Average token length: {mean}")
+    print(f"Full token length: {sum(lengths)}")
+    token_dataset = Dataset.from_list(tokenized_batches)
+    return token_dataset
+
+
+def tokenize_and_truncate(formatted_instances):
+    tokenized = tokenizer(formatted_instances, truncation=True, padding="max_length", max_length=max_length, return_tensors="pt")
+    detokenized = tokenizer.batch_decode(tokenized["input_ids"])
+    return tokenized, detokenized
+
+def sample_half_toks(SFT_dataset, max_num_tokens):
+    raw_instances = []
+    formatted_conversations = []
+    tokenized_conversations = []
+    num_tokens = 0
+    ds_columns = SFT_dataset.column_names
+    formatted_ds = SFT_dataset.map(lambda x: {"formatted_chat" : tokenizer.apply_chat_template(x["messages"], tokenize=False, add_generation_prompt=False)}, num_proc=16, remove_columns=ds_columns)
+    progress_bar = tqdm(total=max_num_tokens, desc="Tokens processed", unit="token")
+    for i in range(0, len(SFT_dataset), 100):
+        instances = formatted_ds[i:min(i+100, len(SFT_dataset))]["formatted_chat"]
+        tokenized, detokenized = tokenize_and_truncate(instances)
+        len_tokenized = tokenized["input_ids"].shape[0] * tokenized["input_ids"].shape[1]
+        if num_tokens + len_tokenized > max_num_tokens:
+            break
+        raw_instances.extend(instances)
+        formatted_conversations.extend(detokenized)
+        tokenized_conversations.extend(tokenized["input_ids"])
+        num_tokens += len_tokenized
+        progress_bar.update(len_tokenized)
+    progress_bar.close()
+    return raw_instances, formatted_conversations, tokenized_conversations, num_tokens
+
+def create_dataset(raw_instances, formatted_conversations, tokenized_conversations):
+    assert len(raw_instances) == len(formatted_conversations) == len(tokenized_conversations)
+    tokenized_conversations_tensor = torch.stack(tokenized_conversations)
+    dataset_list = [
+        {
+            "raw": raw,
+            "formatted": formatted,
+            "tokenized": tokenized,
+        }
+        for raw, formatted, tokenized in zip(
+            raw_instances, formatted_conversations, tokenized_conversations_tensor
+        )
+    ]
+    return Dataset.from_list(dataset_list)
+
+def process_SFT_dataset(
+        dataset_name: str = "open-r1/OpenR1-Math-220k", 
+        batch_size: int = 1, 
+        max_length: int = 4096,
+        max_tokens: int = 200_000_000,
+        ):
+    # "allenai/tulu-3-sft-olmo-2-mixture"
+    dataset = load_dataset("open-r1/OpenR1-Math-220k", "default")["train"]
+    shuffled_dataset = dataset.shuffle(seed=42)
+    raw_instances, formatted_conversations, tokenized_conversations, num_tokens = sample_half_toks(shuffled_dataset, max_tokens)
+    dataset = create_dataset(raw_instances, formatted_conversations, tokenized_conversations)
+    return dataset
+
+
+if __name__ == "__main__":
+    print("Starting tokenization...")
+    # dataset_name = "mlfoundations/dclm-baseline-1.0-parquet"
+    dataset_name = "open-r1/OpenR1-Math-220k"
+    model_id = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer.padding_side = "left"
+    max_length = tokenizer.model_max_length
+    max_tokens = 200_000_000
+    batch_size = 10
+    # final_dataset_path = "dclm-200M_SmolLM2-1.7B"
+    final_dataset_path = "OpenR1-Math-220k-200M_SmolLM2-1.7B"
+    save_directory = "/home/user/repos/ModelDiffing/data/" + final_dataset_path
+
+    # Process a pre-training dataset
+    # processed_dataset = process_dataset(
+    #     dataset_name=dataset_name,
+    #     batch_size=1, 
+    #     max_length=max_length,
+    #     max_tokens=max_tokens,
+    #     )
+
+    # Process an SFT dataset
+    processed_dataset = process_SFT_dataset(
+        dataset_name=dataset_name,
+        batch_size=batch_size, 
+        max_length=max_length,
+        max_tokens=max_tokens,
+        )
+
+
+    if not os.path.exists(save_directory):
+        os.makedirs(save_directory)
+    processed_dataset.save_to_disk(save_directory)
+    processed_dataset.push_to_hub("Neelectric/" + final_dataset_path)
