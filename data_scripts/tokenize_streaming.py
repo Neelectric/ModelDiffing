@@ -44,6 +44,21 @@ def custom_collate_fn(batch):
         return {
             'text': [item['text'] for item in filtered_batch],
         }
+    
+def create_dataset(raw_instances, formatted_conversations, tokenized_conversations):
+    assert len(raw_instances) == len(formatted_conversations) == len(tokenized_conversations)
+    tokenized_conversations_tensor = torch.stack(tokenized_conversations)
+    dataset_list = [
+        {
+            "raw": raw,
+            "formatted": formatted,
+            "tokenized": tokenized,
+        }
+        for raw, formatted, tokenized in zip(
+            raw_instances, formatted_conversations, tokenized_conversations_tensor
+        )
+    ]
+    return Dataset.from_list(dataset_list)
 
 def process_pretrain_dataset(
         dataset_name: str = "allenai/dolmino-mix-1124", 
@@ -77,6 +92,7 @@ def process_pretrain_dataset(
         batch_size=batch_size,
         collate_fn=custom_collate_fn
     )
+    batches = []
     tokenized_batches = []
     lengths = []
     tokens_so_far = 0
@@ -102,19 +118,28 @@ def process_pretrain_dataset(
                 if tokens_so_far >= max_tokens:
                     print(f"Finished tokenizing {max_tokens} tokens. Exiting loop.")
                     break
-                tokenized_batches.append(inputs)
+                batches.append(batch['text'])
+                tokenized_batches.append(inputs.input_ids[0])
+                # print(tokenized_batches)
             except Exception as e:
                 print(f"Error processing batch {i}: {e}")
 
     mean = sum(lengths) / len(lengths)
     print(f"Average token length: {mean}")
     print(f"Full token length: {sum(lengths)}")
-    token_dataset = Dataset.from_list(tokenized_batches)
+    # token_dataset = Dataset.from_list(tokenized_batches)
+    token_dataset = create_dataset(batches, batches, tokenized_batches)
     return token_dataset
 
 
 def tokenize_and_truncate(formatted_instances):
-    tokenized = tokenizer(formatted_instances, truncation=True, padding="max_length", max_length=max_length, return_tensors="pt")
+    tokenized = tokenizer(
+        formatted_instances, 
+        truncation=True, 
+        padding="max_length", 
+        max_length=max_length, 
+        return_tensors="pt"
+        )
     detokenized = tokenizer.batch_decode(tokenized["input_ids"])
     return tokenized, detokenized
 
@@ -140,28 +165,12 @@ def sample_half_toks(SFT_dataset, max_num_tokens):
     progress_bar.close()
     return raw_instances, formatted_conversations, tokenized_conversations, num_tokens
 
-def create_dataset(raw_instances, formatted_conversations, tokenized_conversations):
-    assert len(raw_instances) == len(formatted_conversations) == len(tokenized_conversations)
-    tokenized_conversations_tensor = torch.stack(tokenized_conversations)
-    dataset_list = [
-        {
-            "raw": raw,
-            "formatted": formatted,
-            "tokenized": tokenized,
-        }
-        for raw, formatted, tokenized in zip(
-            raw_instances, formatted_conversations, tokenized_conversations_tensor
-        )
-    ]
-    return Dataset.from_list(dataset_list)
-
 def process_SFT_dataset(
         dataset_name: str = "open-r1/OpenR1-Math-220k", 
         batch_size: int = 1, 
         max_length: int = 4096,
         max_tokens: int = 200_000_000,
         ):
-    # "allenai/tulu-3-sft-olmo-2-mixture"
     dataset = load_dataset("open-r1/OpenR1-Math-220k", "default")["train"]
     shuffled_dataset = dataset.shuffle(seed=42)
     raw_instances, formatted_conversations, tokenized_conversations, num_tokens = sample_half_toks(shuffled_dataset, max_tokens)
@@ -171,33 +180,39 @@ def process_SFT_dataset(
 
 if __name__ == "__main__":
     print("Starting tokenization...")
-    # dataset_name = "mlfoundations/dclm-baseline-1.0-parquet"
-    dataset_name = "open-r1/OpenR1-Math-220k"
+
+    dataset_name = "mlfoundations/dclm-baseline-1.0-parquet"
+    final_dataset_path = "dclm-200M_SmolLM2-1.7B"
+
+    # dataset_name = "allenai/tulu-3-sft-olmo-2-mixture"
+
+    # dataset_name = "open-r1/OpenR1-Math-220k"
+    # final_dataset_path = "OpenR1-Math-220k-200M_SmolLM2-1.7B"
+
     model_id = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     tokenizer.padding_side = "left"
+    tokenizer.chat_template = "{% for message in messages %}{% if loop.first and messages[0]['role'] != 'system' %}{{ '<|im_start|>system\nYou are a helpful AI Assistant that provides well-reasoned and detailed responses. You first think about the reasoning process as an internal monologue and then provide the user with the answer. Respond in the following format: <think>\n...\n</think>\n<answer>\n...\n</answer><|im_end|>\n' }}{% endif %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
     max_length = tokenizer.model_max_length
     max_tokens = 200_000_000
     batch_size = 10
-    # final_dataset_path = "dclm-200M_SmolLM2-1.7B"
-    final_dataset_path = "OpenR1-Math-220k-200M_SmolLM2-1.7B"
     save_directory = "/home/user/repos/ModelDiffing/data/" + final_dataset_path
 
     # Process a pre-training dataset
-    # processed_dataset = process_dataset(
-    #     dataset_name=dataset_name,
-    #     batch_size=1, 
-    #     max_length=max_length,
-    #     max_tokens=max_tokens,
-    #     )
-
-    # Process an SFT dataset
-    processed_dataset = process_SFT_dataset(
+    processed_dataset = process_pretrain_dataset(
         dataset_name=dataset_name,
-        batch_size=batch_size, 
+        batch_size=1, 
         max_length=max_length,
         max_tokens=max_tokens,
         )
+
+    # Process an SFT dataset
+    # processed_dataset = process_SFT_dataset(
+    #     dataset_name=dataset_name,
+    #     batch_size=batch_size, 
+    #     max_length=max_length,
+    #     max_tokens=max_tokens,
+    #     )
 
     # Save to disk and push to hub
     if not os.path.exists(save_directory):

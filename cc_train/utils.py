@@ -1,5 +1,4 @@
 # Written by Neel Rajani, 05.03.25. Directly adapted from https://github.com/ckkissane/crosscoder-model-diff-replication
-
 import os
 from IPython import get_ipython
 
@@ -16,7 +15,7 @@ pio.renderers.default = "jupyterlab"
 import einops
 import json
 import argparse
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk, concatenate_datasets
 from pathlib import Path
 import plotly.express as px
 from torch.distributions.categorical import Categorical
@@ -27,13 +26,15 @@ from transformer_lens import HookedTransformer
 from jaxtyping import Float
 from transformer_lens.hook_points import HookPoint
 from functools import partial
-from IPython.display import HTML, display
+from IPython import display
+from IPython.display import HTML
 from transformer_lens.utils import to_numpy
 import pandas as pd
 from html import escape
 import colorsys
 import wandb
 import plotly.graph_objects as go
+from huggingface_hub import snapshot_download
 
 update_layout_set = {
     "xaxis_range", "yaxis_range", "hovermode", "xaxis_title", "yaxis_title", "colorbar", "colorscale", "coloraxis",
@@ -138,7 +139,6 @@ def create_html(strings, values, saturation=0.5, allow_different_length=False):
         html += f'<span style="background-color: {hex_color}; border: 1px solid lightgray; font-size: 16px; border-radius: 3px;">{s}</span>'
 
     display(HTML(html))
-    
 
 # crosscoder stuff
 
@@ -171,20 +171,79 @@ def arg_parse_update_cfg(default_cfg):
     print(json.dumps(cfg, indent=2))
     return cfg    
 
-def load_pile_lmsys_mixed_tokens():
+#old function definition by authors
+# def load_pile_lmsys_mixed_tokens():
+#     try:
+#         print("Loading data from disk")
+#         all_tokens = torch.load("/workspace/data/pile-lmsys-mix-1m-tokenized-gemma-2.pt")
+#     except:
+#         print("Data is not cached. Loading data from HF")
+#         data = load_dataset(
+#             "ckkissane/pile-lmsys-mix-1m-tokenized-gemma-2", 
+#             split="train", 
+#             cache_dir="/workspace/cache/"
+#         )
+#         data.save_to_disk("/workspace/data/pile-lmsys-mix-1m-tokenized-gemma-2.hf")
+#         data.set_format(type="torch", columns=["input_ids"])
+#         all_tokens = data["input_ids"]
+#         torch.save(all_tokens, "/workspace/data/pile-lmsys-mix-1m-tokenized-gemma-2.pt")
+#         print(f"Saved tokens to disk")
+#     return all_tokens
+
+tokenization_progress = {
+    "gemma-2": "ckkissane/pile-lmsys-mix-1m-tokenized-gemma-2",
+    "qwen": False,
+}
+
+def tokenize(model_type):
+    # with gemma, all_tokens has shape [963556, 1024], so 986,681,344 tokens total
+    print("Downloading data")
+    folder = snapshot_download(
+                    "science-of-finetuning/fineweb-1m-sample", 
+                    repo_type="dataset",
+                    local_dir="/home/user/repos/R1-crosscoder/data",
+                    # replace "data/CC-MAIN-2023-50/*" with "sample/100BT/*" to use the 100BT sample
+                    # allow_patterns="sample/10BT/*"
+                    )
+
+
+    return
+
+#my rewrite to properly take care of relative paths
+def load_pile_lmsys_mixed_tokens(base_model_id):
+    if "gemma" in base_model_id.lower():
+        model_type = "gemma-2"
+    elif "qwen" in base_model_id.lower():
+        model_type = "qwen"
+    else:
+        raise ValueError("Model type not recognized")
+    
+    if type(tokenization_progress[model_type]) == str:
+        tokenized_dataset_id = tokenization_progress[model_type]
+    elif tokenization_progress[model_type] == False:
+        tokenized_dataset_id = tokenize(model_type)
+
+    current_dir = os.getcwd()
+    if current_dir.endswith("crosscoder-model-diff-replication"):
+        # move up one directory
+        current_dir = os.path.dirname(current_dir)
+    data_path = os.path.join(current_dir, "data/pile-lmsys-mix-1m-tokenized-" + model_type + ".pt")
+    cache_dir = os.path.join(current_dir, "cache")
+    hf_data_path = os.path.join(current_dir, "data/pile-lmsys-mix-1m-tokenized-" + model_type + ".hf")
+    
     try:
         print("Loading data from disk")
-        all_tokens = torch.load("/workspace/data/pile-lmsys-mix-1m-tokenized-gemma-2.pt")
+        all_tokens = torch.load(data_path)
     except:
         print("Data is not cached. Loading data from HF")
         data = load_dataset(
-            "ckkissane/pile-lmsys-mix-1m-tokenized-gemma-2", 
-            split="train", 
-            cache_dir="/workspace/cache/"
+            tokenized_dataset_id,
+            split="train",
+            cache_dir=cache_dir,
         )
-        data.save_to_disk("/workspace/data/pile-lmsys-mix-1m-tokenized-gemma-2.hf")
+        data.save_to_disk(hf_data_path)
         data.set_format(type="torch", columns=["input_ids"])
         all_tokens = data["input_ids"]
-        torch.save(all_tokens, "/workspace/data/pile-lmsys-mix-1m-tokenized-gemma-2.pt")
+        torch.save(all_tokens, data_path)
         print(f"Saved tokens to disk")
     return all_tokens
