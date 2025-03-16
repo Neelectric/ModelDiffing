@@ -12,7 +12,7 @@ from typing import NamedTuple
 
 DTYPES = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
 # raise NotImplementedError("I need to change this save directory!")
-SAVE_DIR = Path("/home/user/repos/ModelDiffing/cross_coder_ckpts")
+SAVE_DIR = Path("/home/user/repos/ModelDiffing/cross_coder_ckpts/")
 
 class LossOutput(NamedTuple):
     # loss: torch.Tensor
@@ -128,15 +128,20 @@ class CrossCoder(nn.Module):
 
     def create_save_dir(self):
         # raise NotImplementedError("I need to change this to the new OLMo-2 code!")
-        base_dir = Path("/home/user/repos/ModelDiffing/cross_coder_ckpts")
-        version_list = [
-            int(file.name.split("_")[1])
-            for file in list(SAVE_DIR.iterdir())
-            if "version" in str(file)
-        ]
-        if len(version_list):
-            version = 1 + max(version_list)
-        else:
+        base_dir = Path("/home/user/repos/ModelDiffing/crosscoder_ckpts/")
+        try:
+            version_list = [
+                int(file.name.split("_")[1])
+                for file in list(SAVE_DIR.iterdir())
+                if "version" in str(file)
+            ]
+            if len(version_list):
+                version = 1 + max(version_list)
+            else:
+                version = 0
+        except Exception as e:
+            print(f"could not find existing versions due to {e}")
+            print("Setting version to 0")
             version = 0
         self.save_dir = base_dir / f"version_{version}"
         self.save_dir.mkdir(parents=True)
