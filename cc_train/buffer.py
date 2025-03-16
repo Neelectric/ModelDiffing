@@ -4,6 +4,12 @@ from utils import *
 from transformer_lens import ActivationCache
 import tqdm
 
+device = "cpu"
+if torch.cuda.is_available():
+    device = "cuda"
+elif torch.backends.mps.is_available():
+    device = "mps"
+
 class Buffer:
     """
     This defines a data buffer, to store a stack of acts across both model that can be used to train the autoencoder. It'll automatically run the model to generate more when it gets halfway empty.
@@ -30,13 +36,18 @@ class Buffer:
         
         estimated_norm_scaling_factor_A = self.estimate_norm_scaling_factor(cfg["model_batch_size"], model_A)
         estimated_norm_scaling_factor_B = self.estimate_norm_scaling_factor(cfg["model_batch_size"], model_B)
+        self.cfg["estimated_norm_scaling_factor_A"] = estimated_norm_scaling_factor_A
+        self.cfg["estimated_norm_scaling_factor_B"] = estimated_norm_scaling_factor_B
+        print(f"Estimated norm scaling factor A: {estimated_norm_scaling_factor_A}")
+        print(f"Estimated norm scaling factor B: {estimated_norm_scaling_factor_B}")
         
         self.normalisation_factor = torch.tensor(
         [
             estimated_norm_scaling_factor_A,
             estimated_norm_scaling_factor_B,
         ],
-        device="cuda:0",
+        # device="cuda:0",
+        device=cfg["device"],
         dtype=torch.float32,
         )
         self.refresh()
@@ -66,13 +77,13 @@ class Buffer:
     def refresh(self):
         self.pointer = 0
         print("Refreshing the buffer!")
-        with torch.autocast("cuda", torch.bfloat16):
+        with torch.autocast(device, torch.bfloat16):
             if self.first:
                 num_batches = self.buffer_batches
             else:
                 num_batches = self.buffer_batches // 2
             self.first = False
-            for _ in tqdm.trange(0, num_batches, self.cfg["model_batch_size"]):
+            for _ in tqdm.trange(0, num_batches, self.cfg["model_batch_size"], dynamic_ncols=True):
                 tokens = self.all_tokens[
                     self.token_pointer : min(
                         self.token_pointer + self.cfg["model_batch_size"], num_batches

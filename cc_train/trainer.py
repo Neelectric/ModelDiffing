@@ -1,6 +1,4 @@
 # Written by Neel Rajani, 05.03.25. Directly adapted from https://github.com/ckkissane/crosscoder-model-diff-replication
-
-
 from utils import *
 from crosscoder import CrossCoder
 from buffer import Buffer
@@ -26,7 +24,10 @@ class Trainer:
         )
         self.step_counter = 0
 
-        wandb.init(project=cfg["wandb_project"], entity=cfg["wandb_entity"])
+        wandb.init(project=cfg["wandb_project"], 
+                   entity=cfg["wandb_entity"], 
+                   name=cfg["run_name"],
+                   config=cfg)
 
     def lr_lambda(self, step):
         if step < 0.8 * self.total_steps:
@@ -75,7 +76,7 @@ class Trainer:
     def train(self):
         self.step_counter = 0
         try:
-            for i in tqdm.trange(self.total_steps):
+            for i in tqdm.trange(self.total_steps, dynamic_ncols=True):
                 loss_dict = self.step()
                 if i % self.cfg["log_every"] == 0:
                     self.log(loss_dict)

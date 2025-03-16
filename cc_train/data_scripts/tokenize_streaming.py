@@ -118,7 +118,7 @@ def process_pretrain_dataset(
                 if tokens_so_far >= max_tokens:
                     print(f"Finished tokenizing {max_tokens} tokens. Exiting loop.")
                     break
-                batches.append(batch['text'])
+                batches.append(batch['text'][0])
                 tokenized_batches.append(inputs.input_ids[0])
                 # print(tokenized_batches)
             except Exception as e:

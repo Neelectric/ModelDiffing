@@ -11,8 +11,8 @@ from huggingface_hub import hf_hub_download
 from typing import NamedTuple
 
 DTYPES = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
-raise NotImplementedError("I need to change this save directory!")
-SAVE_DIR = Path("/workspace/crosscoder-model-diff-replication/checkpoints")
+# raise NotImplementedError("I need to change this save directory!")
+SAVE_DIR = Path("/home/user/repos/ModelDiffing/cross_coder_ckpts")
 
 class LossOutput(NamedTuple):
     # loss: torch.Tensor
@@ -127,8 +127,8 @@ class CrossCoder(nn.Module):
         return LossOutput(l2_loss=l2_loss, l1_loss=l1_loss, l0_loss=l0_loss, explained_variance=explained_variance, explained_variance_A=explained_variance_A, explained_variance_B=explained_variance_B)
 
     def create_save_dir(self):
-        raise NotImplementedError("I need to change this to the new OLMo-2 code!")
-        base_dir = Path("/workspace/crosscoder-model-diff-replication/checkpoints")
+        # raise NotImplementedError("I need to change this to the new OLMo-2 code!")
+        base_dir = Path("/home/user/repos/ModelDiffing/cross_coder_ckpts")
         version_list = [
             int(file.name.split("_")[1])
             for file in list(SAVE_DIR.iterdir())
@@ -142,7 +142,7 @@ class CrossCoder(nn.Module):
         self.save_dir.mkdir(parents=True)
 
     def save(self):
-        raise NotImplementedError("I need to change this to the new OLMo-2 code!")
+        # raise NotImplementedError("I need to change this to the new OLMo-2 code!")
         if self.save_dir is None:
             self.create_save_dir()
         weight_path = self.save_dir / f"{self.save_version}.pt"
