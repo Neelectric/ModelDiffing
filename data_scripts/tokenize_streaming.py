@@ -35,9 +35,6 @@ def custom_collate_fn(batch):
     filtered_batch = [item for item in batch if item is not None and item.get('text') is not None]
     if not filtered_batch:
         return {'text': []}
-    
-    # print(filtered_batch[0]["source"])
-    # print(filtered_batch[0]["text"])
     if "source" in list(filtered_batch[0].keys()):
         return {
             'text': [item['text'] for item in filtered_batch],
@@ -202,7 +199,7 @@ if __name__ == "__main__":
         max_tokens=max_tokens,
         )
 
-
+    # Save to disk and push to hub
     if not os.path.exists(save_directory):
         os.makedirs(save_directory)
     processed_dataset.save_to_disk(save_directory)
