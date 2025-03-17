@@ -12,7 +12,7 @@ from typing import NamedTuple
 
 DTYPES = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
 # raise NotImplementedError("I need to change this save directory!")
-SAVE_DIR = Path("/home/user/repos/ModelDiffing/cross_coder_ckpts/")
+SAVE_DIR = Path("/home/user/repos/ModelDiffing/crosscoder_ckpts/")
 
 class LossOutput(NamedTuple):
     # loss: torch.Tensor

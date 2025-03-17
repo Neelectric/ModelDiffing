@@ -31,7 +31,7 @@ all_tokens, attention_masks = load_mixed_tokens(
 all_tokens = all_tokens.to("cpu")
 attention_masks = attention_masks.to("cpu")
 torch.cuda.empty_cache() 
-global_seq_len = 2048
+global_seq_len = 4096
 all_tokens = all_tokens[::,-global_seq_len:]
 attention_masks = attention_masks[::,-global_seq_len:]
 
@@ -70,8 +70,8 @@ torch.cuda.empty_cache()
 
 default_cfg = {
     "seed": 42,
-    "batch_size": 256, #originally 4096
-    "buffer_mult": 64,
+    "batch_size": 1024, #originally 4096
+    "buffer_mult": 128,
     "lr": 5e-5,
     "num_tokens": 400_000_000, #originally 400_000_000
     "l1_coeff": 2,
@@ -86,7 +86,7 @@ default_cfg = {
     "device": device,
     "model_batch_size": 2,
     "log_every": 20,
-    "save_every": 10_000, # originally 30000 
+    "save_every": 100_000, # originally 30000 
     "dec_init_norm": 0.08,
     "hook_point": "blocks.12.hook_resid_pre",
     "wandb_project": "R1-crosscoder",
