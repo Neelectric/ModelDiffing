@@ -55,6 +55,7 @@ base_model = HookedTransformer.from_pretrained(
     # n_devices=n_devices,
     # from_pretrained_kwargs={"attn_implementation":"flash_attention_2",},
     # hf_model=base_model_hf,
+    dtype="bfloat16",
     fold_value_biases=False,
 ).to("cuda:0")
 
@@ -64,6 +65,7 @@ ft_model = HookedTransformer.from_pretrained(
     # n_devices=n_devices,
     # from_pretrained_kwargs={"attn_implementation":"flash_attention_2",},
     # hf_model=ft_model_hf,
+    dtype="bfloat16",
     fold_value_biases=False,
 ).to("cuda:1")
 torch.cuda.empty_cache() 
