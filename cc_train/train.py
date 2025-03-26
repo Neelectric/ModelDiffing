@@ -18,9 +18,12 @@ device = 'cuda:0'
 # ft_model_id = "google/gemma-2-2b-it"
 
 ### Qwen ids
-base_model_id = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
-# ft_model_id = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
-ft_model_id = "Neelectric/SmolLM2-1.7B-Instruct_SFT"
+base_model_id = "Qwen/Qwen2.5-Math-1.5B"
+ft_model_id = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+
+### SmolLM ids
+# base_model_id = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+# ft_model_id = "Neelectric/SmolLM2-1.7B-Instruct_SFT"
 
 ### load in the tokens
 all_tokens, attention_masks = load_mixed_tokens(

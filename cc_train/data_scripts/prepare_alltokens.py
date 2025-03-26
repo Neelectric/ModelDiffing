@@ -2,37 +2,6 @@
 from datasets import load_dataset, load_from_disk, concatenate_datasets
 import torch
 
-
-# def shuffle_fineweb_openr1_mixed_tokens(base_model_id):
-#     try:
-#         fw_ds = load_from_disk("/home/user/repos/ModelDiffing/data/fineweb-qwen-2.5-math-1.5b")
-#     except:
-#         print("fineweb not found. Downloading")
-#         fw_ds = load_dataset("Neelectric/fineweb-qwen-2.5-math-1.5b")
-#     try:
-#         or_ds = load_from_disk("/home/user/repos/ModelDiffing/data/openr1-math-220k-qwen-2.5-math-1.5b")
-#     except:
-#         print("or not found. Downloading")
-#         or_ds = load_dataset("Neelectric/openr1-math-220k-qwen-2.5-math-1.5b")
-
-#     combined_ds = concatenate_datasets([fw_ds, or_ds])
-#     shuffled_ds = combined_ds.shuffle(seed=49)
-#     all_tokens = shuffled_ds["tokenized"]
-#     # this is a list of lists, we want a pytorch tensor instead. torch.cat(all_tokens) complains that we want it to be a list of tensors, so we instead do
-#     all_tokens = torch.tensor(all_tokens)
-#     torch.save(all_tokens, "/home/user/repos/ModelDiffing/data/fineweb-openr1-mixed-tokens.pt")
-#     return all_tokens
-
-# def load_fineweb_openr1_mixed_tokens(base_model_id):
-#     try:
-#         all_tokens = torch.load("/home/user/repos/ModelDiffing/data/fineweb-openr1-mixed-tokens.pt")
-#     except:
-#         print("Data is not cached. Shuffling and saving data")
-#         all_tokens = shuffle_fineweb_openr1_mixed_tokens(base_model_id)
-#     all_tokens = all_tokens.to("cuda")
-#     return all_tokens
-
-
 def save_mixed_tokens(
         pretrain_dataset_name: str = "dclm-200M_SmolLM2-1.7B",
         sft_dataset_name: str = "OpenR1-Math-220k-200M_SmolLM2-1.7B",
