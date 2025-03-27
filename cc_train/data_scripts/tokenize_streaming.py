@@ -240,14 +240,14 @@ if __name__ == "__main__":
     # dataset_name = "open-r1/OpenR1-Math-220k"
     # final_dataset_path = "OpenR1-Math-220k_" + model_name + "_200M-tokens"
     
-    batch_size = 100
+    batch_size = 3
     save_directory = "/home/user/repos/ModelDiffing/data/" + final_dataset_path
 
     if dataset_type == "pretrain":
         processed_dataset = process_pretrain_dataset(
             dataset_name=dataset_name,
             subset_name=subset_name,
-            batch_size=1, 
+            batch_size=batch_size, 
             max_length=max_length,
             max_tokens=max_tokens,
             )
